@@ -28,9 +28,18 @@ exec = /path/to/polybar-appgate.py
 interval = 5
 ```
 
+## Configuration
+
+The icons and colors used can be overridden by setting the environment variables described in the table below.
+
+| Status       | Color                                            | Icon                        |
+|--------------|--------------------------------------------------|-----------------------------|
+| Connected    | `APPGATE_COLOR_CONNECTED` (default: `55AA55`)    | `APPGATE_ICON_CONNECTED`    |
+| Disconnected | `APPGATE_COLOR_DISCONNECTED` (default: `FF7070`) | `APPGATE_ICON_DISCONNECTED` |
+| Connecting   | `APPGATE_COLOR_CONNECTING` (default: `F5A70A`)   | `APPGATE_ICON_CONNECTING`   |
+| Error        | `APPGATE_COLOR_ERROR` (default: `FF7070`)        | `APPGATE_ICON_ERROR`        |
+
 ## Known Issues
 
 * AppGate service does not automatically restart if it crashes
-* TODO: allow to customize colors
-* TODO: allow to customize icons
 * TODO: implement icon click trigger to manually start login flow
