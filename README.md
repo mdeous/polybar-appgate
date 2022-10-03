@@ -8,6 +8,7 @@ This repository contains 2 scripts to integrate AppGate connection status in pol
 Status icons:
 
 * connected: ![connected](images/icon-connected.png)
+* disconnected: ![disconnected](images/icon-disconnected.png)
 * connecting: ![disconnected](images/icon-connecting.png)
 * error: ![error](images/icon-error.png)
 
