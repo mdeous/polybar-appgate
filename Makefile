@@ -4,6 +4,8 @@ PWD=$(shell pwd)
 
 all:
 
+update: pull install_service
+
 install_service:
 	mkdir -p $(SERVICE_PATH)
 	cp $(SERVICE) $(SERVICE_PATH)
@@ -11,3 +13,6 @@ install_service:
 	systemctl --user daemon-reload
 	systemctl --user start $(SERVICE)
 	systemctl --user enable $(SERVICE)
+
+pull:
+	git pull origin main
