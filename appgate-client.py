@@ -16,7 +16,7 @@ from multiprocessing.connection import Listener
 from subprocess import Popen, PIPE, STDOUT
 from typing import Optional, Any
 
-DEBUG = False
+DEBUG = True
 RUN_DIR = f"/run/user/{os.getuid()}"
 SOCK_FILE = os.path.join(RUN_DIR, "appgate.service.sock")
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -27,6 +27,7 @@ IGNORED_ERROR_CODES = [
     -32602,
 ]
 STATUS_CONNECTED = "connected"
+STATUS_DISCONNECTED = "disconnected"
 STATUS_ERROR = "error"
 STATUS_UNKNOWN = "unknown"
 
@@ -199,8 +200,8 @@ def main():
     # start session and initiate SAML login
     appgate.send("ready", autoLogin=True)
     appgate.send("setLocale", locale="en")
-    conn_result = appgate.saml_connect(saml_profile)
-    appgate_connected = conn_result == STATUS_CONNECTED
+    appgate_status = appgate.saml_connect(saml_profile)
+    appgate_connected = appgate_status == STATUS_CONNECTED
 
     # listen for IPC connections
     listener = Listener((MPC_HOST, MPC_PORT), authkey=MPC_KEY)
@@ -228,7 +229,7 @@ def main():
             msg = conn.recv()
             log(f"[main] received message: {msg}")
             if msg == "status":
-                conn.send(conn_result)
+                conn.send(appgate_status)
                 continue
             elif msg == "goodbye":
                 conn.send("goodbye")
