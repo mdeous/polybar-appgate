@@ -42,5 +42,4 @@ The icons and colors used can be overridden by setting the environment variables
 
 ## Known Issues
 
-* AppGate service does not automatically restart if it crashes
 * TODO: implement icon click trigger to manually start login flow
