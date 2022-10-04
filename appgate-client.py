@@ -16,7 +16,7 @@ from multiprocessing.connection import Listener
 from subprocess import Popen, PIPE, STDOUT
 from typing import Optional, Any
 
-DEBUG = True
+DEBUG = False
 RUN_DIR = f"/run/user/{os.getuid()}"
 SOCK_FILE = os.path.join(RUN_DIR, "appgate.service.sock")
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -201,7 +201,6 @@ def main():
     appgate.send("ready", autoLogin=True)
     appgate.send("setLocale", locale="en")
     appgate_status = appgate.saml_connect(saml_profile)
-    appgate_connected = appgate_status == STATUS_CONNECTED
 
     # listen for IPC connections
     listener = Listener((MPC_HOST, MPC_PORT), authkey=MPC_KEY)
@@ -216,9 +215,8 @@ def main():
             break
 
         # if appgate isn't connected yet, check status of SAML login
-        if not appgate_connected:
-            conn_result = appgate.saml_connect(saml_profile)
-            appgate_connected = conn_result == STATUS_CONNECTED
+        if not appgate_status == STATUS_CONNECTED:
+            appgate_status = appgate.saml_connect(saml_profile)
 
         # wait for and reply to connections
         log("[main] waiting for mpc connections")
