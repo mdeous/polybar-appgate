@@ -1,0 +1,10 @@
+[Unit]
+Description=Appgate headless client
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=SCRIPT_PATH/appgate-client.py
+
+[Install]
+WantedBy=multi-user.target
