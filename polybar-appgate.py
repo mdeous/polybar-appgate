@@ -27,7 +27,7 @@ OUTPUT_DISCONNECTED = f"%{{F#{COLOR_DISCONNECTED}}}{ICON_DISCONNECTED}%{{F-}}"
 OUTPUT_CONNECTING = f"%{{F#{COLOR_CONNECTING}}}{ICON_CONNECTING}%{{F-}}"
 OUTPUT_ERROR = f"%{{F#{COLOR_ERROR}}}{ICON_ERROR}%{{F-}}"
 
-RESPONSES = {
+OUTPUT = {
     "login": OUTPUT_CONNECTING,
     "connecting": OUTPUT_CONNECTING,
     "connected": OUTPUT_CONNECTED,
@@ -53,7 +53,7 @@ def main():
     conn.send(cmd)
     if cmd != "exit-service":
         resp = conn.recv()
-        print(RESPONSES.get(resp, OUTPUT_DISCONNECTED))
+        print(OUTPUT.get(resp, OUTPUT_DISCONNECTED))
         conn.send("goodbye")
         conn.close()
 
