@@ -18,7 +18,8 @@ Note: the client script is only able to handle SAML connection, there are no pla
 
 1. in AppGate GUI client's advanced settings, enable automatic login
 1. clone this repository wherever you want
-1. automatically start the `appgate-client.py` script in your i3 config
+1. automatically start the `appgate-client.py` script in your i3 config, or install the provided service file by running
+  `make install`
 1. add the `polybar-appgate.py` script to your polybar config, as shown in the example below
 
 ```text
