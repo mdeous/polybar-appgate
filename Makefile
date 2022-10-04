@@ -1,15 +1,13 @@
-BIN_PATH=${HOME}/.local/bin
 SERVICE_PATH=${HOME}/.config/systemd/user/
-CLIENT=appgate-client.py
 SERVICE=appgate-client.service
+PWD=$(shell pwd)
 
 all:
 
-install:
-	mkdir -p $(BIN_PATH)
-	cp $(CLIENT) $(BIN_PATH)
+install_service:
 	mkdir -p $(SERVICE_PATH)
 	cp $(SERVICE) $(SERVICE_PATH)
+	sed -i -e 's:SCRIPT_PATH:$(PWD):' $(SERVICE_PATH)/$(SERVICE)
 	systemctl --user daemon-reload
-	systemctl --user start appgate-client.service
-	systemctl --user enable appgate-client.service
+	systemctl --user start $(SERVICE)
+	systemctl --user enable $(SERVICE)
