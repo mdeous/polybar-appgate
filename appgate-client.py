@@ -166,7 +166,7 @@ def process_exists(target_exe: str) -> bool:
             exe_path = os.path.join(proc_path, "exe")
             try:
                 os.stat(exe_path)
-            except PermissionError:
+            except (PermissionError, FileNotFoundError):
                 continue
             real_exe = os.path.realpath(exe_path)
             if real_exe == target_exe:
