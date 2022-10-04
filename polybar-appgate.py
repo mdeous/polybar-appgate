@@ -7,7 +7,6 @@ MPC_HOST = "127.0.0.1"
 MPC_PORT = 2345
 MPC_KEY = b"polybar-appgate-mpc"
 COMMANDS = [
-    "ping",
     "status",
     "goodbye",
     "exit-service"
