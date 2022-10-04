@@ -11,3 +11,5 @@ install:
 	mkdir -p $(SERVICE_PATH)
 	cp $(SERVICE) $(SERVICE_PATH)
 	systemctl --user daemon-reload
+	systemctl --user start appgate-client.service
+	systemctl --user enable appgate-client.service
