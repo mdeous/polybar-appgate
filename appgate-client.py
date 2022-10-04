@@ -227,11 +227,7 @@ def main():
         while True:
             msg = conn.recv()
             log(f"[main] received message: {msg}")
-            if msg == "ping":
-                log("[main] replying pong")
-                conn.send("pong")
-                continue
-            elif msg == "status":
+            if msg == "status":
                 conn.send(conn_result)
                 continue
             elif msg == "goodbye":
