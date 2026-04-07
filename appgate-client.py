@@ -94,6 +94,7 @@ class AppGateClient:
         )
         self.service: Optional[AppGateService] = None
         self._next_id: int = 0
+        self._recv_buf: bytes = b""
 
     def start_service(self):
         if not AppGateService.exists():
@@ -111,60 +112,41 @@ class AppGateClient:
         self.connected = True
         log("[client] connected to unix socket")
 
-    def send(self, method: str, params: Any = None, **kwargs) -> Any:
+    def send(self, method: str, **kwargs):
         if not self.connected:
             raise Exception("[client] service is not started")
-        if params is None:
-            params = kwargs
         self._next_id += 1
-        call_id = self._next_id
         payload = {
             "jsonrpc": "2.0",
-            "id": call_id,
+            "id": self._next_id,
             "method": method,
-            "params": params
+            "params": kwargs
         }
-        send_data = json.dumps(payload).encode() + b"\n"
-        self.sock.sendall(send_data)
+        self.sock.sendall(json.dumps(payload).encode() + b"\n")
         if self.debug:
-            log(f"[client] <<<\n{json.dumps(payload, indent=2)}")
+            log(f"[client] <<< {method}")
 
-        buf = self.recv()
-        resp_data = json.loads(buf)
-        if resp_data.get("error", None):
-            if resp_data["error"]["code"] not in IGNORED_ERROR_CODES:
-                log("[client] ERROR", resp_data["error"]["message"])
-        else:
-            if self.debug:
-                log(f"[client] >>>\n{json.dumps(resp_data, indent=2)}")
-        return resp_data
-
-    def recv(self) -> bytes:
-        if not self.connected:
-            raise Exception("[client] service is not started")
-        self.sock.settimeout(10.0)
-        data = b""
+    def recv_message(self, timeout: float = 10.0) -> Optional[dict]:
+        self.sock.settimeout(timeout)
         max_size = 64 * 1024
-        while not data.endswith(b"\r\n"):
-            chunk = self.sock.recv(4096)
-            if not chunk:
-                raise Exception("[client] connection closed unexpectedly")
-            data += chunk
-            if len(data) > max_size:
-                raise Exception("[client] message too large")
-        return data
+        try:
+            while b"\n" not in self._recv_buf:
+                chunk = self.sock.recv(4096)
+                if not chunk:
+                    raise Exception("[client] connection closed unexpectedly")
+                self._recv_buf += chunk
+                if len(self._recv_buf) > max_size:
+                    raise Exception("[client] message too large")
+        except socket.timeout:
+            return None
+        line, self._recv_buf = self._recv_buf.split(b"\n", 1)
+        msg = json.loads(line.rstrip(b"\r"))
+        if self.debug:
+            log(f"[client] >>> {msg.get('method', 'response')}")
+        return msg
 
-    def saml_connect(self, saml_profile: int) -> str:
-        resp = self.send("loginSaml", profile=saml_profile)
-        if resp.get("error", None):
-            if resp["error"]["code"] not in IGNORED_ERROR_CODES:
-                log("[client] ERROR", resp["error"]["message"])
-            return STATUS_ERROR
-        if "params" not in resp:
-            log(resp)
-            return STATUS_UNKNOWN
-        log("[main] saml status:", resp["params"]["view"])
-        return resp["params"]["view"]
+    def get_view(self, msg: dict) -> str:
+        return msg.get("params", {}).get("view", "")
 
 
 _logger = logging.getLogger("appgateclient")
@@ -214,22 +196,23 @@ def main():
     appgate = AppGateClient(SOCK_FILE, DEBUG)
     appgate.start_service()
 
-    # read saml profile id
-    data = appgate.recv()
-    data = json.loads(data)
-    saml_profile = data.get("params", {}) \
-        .get("viewData", {}) \
-        .get("setup", {}) \
-        .get("selectedProfile", {}) \
-        .get("id", None)
-    if saml_profile is None:
-        log("[main] saml profile id not found")
-        return
+    # initiate session — client must speak first in v6.5+
+    appgate.send(method="ready", autoLogin=True)
+    appgate.send(method="setLocale", locale="en")
 
-    # start session and initiate SAML login
-    appgate.send("ready", autoLogin=True)
-    appgate.send("setLocale", locale="en")
-    appgate_status = appgate.saml_connect(saml_profile)
+    # read setModel messages until we have connection status
+    appgate_status = STATUS_UNKNOWN
+    log("[main] waiting for service to initialize")
+    for _ in range(60):
+        msg = appgate.recv_message(timeout=2.0)
+        if msg is None:
+            continue
+        view = appgate.get_view(msg)
+        if view:
+            appgate_status = view
+            log(f"[main] status: {view}")
+        if view in (STATUS_CONNECTED, "login"):
+            break
 
     # listen for IPC connections
     listener = Listener((MPC_HOST, MPC_PORT), authkey=MPC_KEY)
@@ -239,16 +222,21 @@ def main():
     signal.signal(signal.SIGTERM, sigterm_handler)
 
     while appgate.service.is_alive() and not shutdown_requested:
-        # if socket file no longer exists, we can no longer proxy messages, let's exit
         if not os.path.exists(SOCK_FILE):
             log("[main] socket file not found")
             break
 
-        # always refresh connection status from the service
-        appgate_status = appgate.saml_connect(saml_profile)
+        # read any pending setModel notifications to refresh status
+        while True:
+            msg = appgate.recv_message(timeout=0.1)
+            if msg is None:
+                break
+            view = appgate.get_view(msg)
+            if view:
+                appgate_status = view
+                log(f"[main] status update: {view}")
 
-        # wait for and reply to connections (with timeout so loop keeps cycling)
-        log("[main] waiting for mpc connections")
+        # wait for and reply to IPC connections
         try:
             conn = listener.accept()
         except socket.timeout:
