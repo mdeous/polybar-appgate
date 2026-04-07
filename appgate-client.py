@@ -8,7 +8,10 @@
 # - in AppGate GUI's advanced settings, automatic connection must be enabled
 #
 import json
+import logging
+import logging.handlers
 import os
+import signal
 import socket
 import time
 from multiprocessing import Process
@@ -64,15 +67,19 @@ class AppGateService(Process):
             stdout=PIPE,
             stderr=STDOUT
         )
-        with open(self.log_file, "a") as outfile:
-            try:
-                for line in process.stdout:
-                    line = line.decode("utf-8")
-                    outfile.write(line)
-                    outfile.flush()
-            except KeyboardInterrupt:
-                log("[service] underlying process killed")
-                return
+        svc_logger = logging.getLogger("appgateservice")
+        svc_handler = logging.handlers.RotatingFileHandler(
+            self.log_file,
+            maxBytes=5 * 1024 * 1024,
+            backupCount=3,
+        )
+        svc_logger.addHandler(svc_handler)
+        try:
+            for line in process.stdout:
+                svc_logger.info(line.decode("utf-8").rstrip())
+        except KeyboardInterrupt:
+            log("[service] underlying process killed")
+            return
         log("[service] underlying process exited")
 
 
@@ -86,6 +93,7 @@ class AppGateClient:
             socket.SOCK_STREAM
         )
         self.service: Optional[AppGateService] = None
+        self._next_id: int = 0
 
     def start_service(self):
         if not AppGateService.exists():
@@ -108,7 +116,8 @@ class AppGateClient:
             raise Exception("[client] service is not started")
         if params is None:
             params = kwargs
-        call_id = int(time.time() * 100000)
+        self._next_id += 1
+        call_id = self._next_id
         payload = {
             "jsonrpc": "2.0",
             "id": call_id,
@@ -133,12 +142,16 @@ class AppGateClient:
     def recv(self) -> bytes:
         if not self.connected:
             raise Exception("[client] service is not started")
+        self.sock.settimeout(10.0)
         data = b""
+        max_size = 64 * 1024
         while not data.endswith(b"\r\n"):
-            recv = self.sock.recv(1)
-            if not recv:
+            chunk = self.sock.recv(4096)
+            if not chunk:
                 raise Exception("[client] connection closed unexpectedly")
-            data += recv
+            data += chunk
+            if len(data) > max_size:
+                raise Exception("[client] message too large")
         return data
 
     def saml_connect(self, saml_profile: int) -> str:
@@ -154,10 +167,26 @@ class AppGateClient:
         return resp["params"]["view"]
 
 
+_logger = logging.getLogger("appgateclient")
+_logger.setLevel(logging.DEBUG)
+_handler = logging.handlers.RotatingFileHandler(
+    os.path.join(CURRENT_DIR, "appgateclient.log"),
+    maxBytes=5 * 1024 * 1024,
+    backupCount=3,
+)
+_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+_logger.addHandler(_handler)
+
+shutdown_requested = False
+
+
 def log(*chunks: Any):
-    with open(os.path.join(CURRENT_DIR, "appgateclient.log"), "a") as outfile:
-        outfile.write(" ".join(map(str, chunks)) + "\n")
-        outfile.flush()
+    _logger.info(" ".join(map(str, chunks)))
+
+
+def sigterm_handler(signum, frame):
+    global shutdown_requested
+    shutdown_requested = True
 
 
 def process_exists(target_exe: str) -> bool:
@@ -204,23 +233,26 @@ def main():
 
     # listen for IPC connections
     listener = Listener((MPC_HOST, MPC_PORT), authkey=MPC_KEY)
+    listener._listener._socket.settimeout(2.0)
     log("[main] mpc listener started")
-    while appgate.service is None:
-        time.sleep(1)
-    assert appgate.service is not None
-    while appgate.service.is_alive():
+
+    signal.signal(signal.SIGTERM, sigterm_handler)
+
+    while appgate.service.is_alive() and not shutdown_requested:
         # if socket file no longer exists, we can no longer proxy messages, let's exit
         if not os.path.exists(SOCK_FILE):
             log("[main] socket file not found")
             break
 
-        # if appgate isn't connected yet, check status of SAML login
-        if not appgate_status == STATUS_CONNECTED:
-            appgate_status = appgate.saml_connect(saml_profile)
+        # always refresh connection status from the service
+        appgate_status = appgate.saml_connect(saml_profile)
 
-        # wait for and reply to connections
+        # wait for and reply to connections (with timeout so loop keeps cycling)
         log("[main] waiting for mpc connections")
-        conn = listener.accept()
+        try:
+            conn = listener.accept()
+        except socket.timeout:
+            continue
         exit_service = False
         log("[main] mpc client connected")
         while True:
@@ -250,5 +282,5 @@ if __name__ == "__main__":
     log("[__main__] starting appgate client")
     try:
         main()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         log("[__main__] appgate client exited")
