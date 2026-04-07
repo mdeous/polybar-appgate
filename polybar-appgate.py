@@ -19,8 +19,8 @@ COLOR_ERROR = os.getenv("APPGATE_COLOR_ERROR", "FF7070")
 
 ICON_CONNECTED = os.getenv("APPGATE_ICON_CONNECTED", "輦")
 ICON_DISCONNECTED = os.getenv("APPGATE_ICON_DISCONNECTED", "聯")
-ICON_CONNECTING = os.getenv("APPGATE_ICON_OK", "ﱾ")
-ICON_ERROR = os.getenv("APPGATE_ICON_OK", "")
+ICON_CONNECTING = os.getenv("APPGATE_ICON_CONNECTING", "ﱾ")
+ICON_ERROR = os.getenv("APPGATE_ICON_ERROR", "")
 
 OUTPUT_CONNECTED = f"%{{F#{COLOR_CONNECTED}}}{ICON_CONNECTED}%{{F-}}"
 OUTPUT_DISCONNECTED = f"%{{F#{COLOR_DISCONNECTED}}}{ICON_DISCONNECTED}%{{F-}}"
@@ -52,6 +52,10 @@ def main():
 
     conn.send(cmd)
     if cmd != "exit-service":
+        if not conn.poll(timeout=3):
+            print(OUTPUT_ERROR)
+            conn.close()
+            return
         resp = conn.recv()
         print(OUTPUT.get(resp, OUTPUT_DISCONNECTED))
         conn.send("goodbye")
