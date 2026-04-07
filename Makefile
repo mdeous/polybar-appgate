@@ -17,7 +17,7 @@ install:
 uninstall:
 	systemctl --user stop $(SERVICE)
 	systemctl --user disable $(SERVICE)
-	rm -rf $(SERVICE_PATH)
+	rm -f $(SERVICE_PATH)/$(SERVICE)
 	systemctl --user daemon-reload
 
 pull:
