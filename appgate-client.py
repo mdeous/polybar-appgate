@@ -208,7 +208,7 @@ def main():
         if msg is None:
             continue
         view = appgate.get_view(msg)
-        if view:
+        if view and view != appgate_status:
             appgate_status = view
             log(f"[main] status: {view}")
         if view in (STATUS_CONNECTED, "login"):
@@ -232,7 +232,7 @@ def main():
             if msg is None:
                 break
             view = appgate.get_view(msg)
-            if view:
+            if view and view != appgate_status:
                 appgate_status = view
                 log(f"[main] status update: {view}")
 
